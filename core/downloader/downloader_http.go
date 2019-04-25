@@ -20,8 +20,8 @@ import (
     "golang.org/x/net/html/charset"
     //    "regexp"
     //    "golang.org/x/net/html"
+    "compress/gzip"
     "strings"
-	"compress/gzip"
 )
 
 // The HttpDownloader download page by package net/http.
@@ -186,31 +186,31 @@ func (this *HttpDownloader) changeCharsetEncodingAuto(contentTypeStr string, sor
 }
 
 func (this *HttpDownloader) changeCharsetEncodingAutoGzipSupport(contentTypeStr string, sor io.ReadCloser) string {
-	var err error
-	gzipReader, err := gzip.NewReader(sor)
-	if err != nil {
-		mlog.LogInst().LogError(err.Error())
-		return ""
-	}
-	defer gzipReader.Close()
-	destReader, err := charset.NewReader(gzipReader, contentTypeStr)
+    var err error
+    gzipReader, err := gzip.NewReader(sor)
+    if err != nil {
+        mlog.LogInst().LogError(err.Error())
+        return ""
+    }
+    defer gzipReader.Close()
+    destReader, err := charset.NewReader(gzipReader, contentTypeStr)
 
-	if err != nil {
-		mlog.LogInst().LogError(err.Error())
-		destReader = sor
-	}
+    if err != nil {
+        mlog.LogInst().LogError(err.Error())
+        destReader = sor
+    }
 
-	var sorbody []byte
-	if sorbody, err = ioutil.ReadAll(destReader); err != nil {
-		mlog.LogInst().LogError(err.Error())
-		// For gb2312, an error will be returned.
-		// Error like: simplifiedchinese: invalid GBK encoding
-		// return ""
-	}
-	//e,name,certain := charset.DetermineEncoding(sorbody,contentTypeStr)
-	bodystr := string(sorbody)
+    var sorbody []byte
+    if sorbody, err = ioutil.ReadAll(destReader); err != nil {
+        mlog.LogInst().LogError(err.Error())
+        // For gb2312, an error will be returned.
+        // Error like: simplifiedchinese: invalid GBK encoding
+        // return ""
+    }
+    //e,name,certain := charset.DetermineEncoding(sorbody,contentTypeStr)
+    bodystr := string(sorbody)
 
-	return bodystr
+    return bodystr
 }
 
 // choose http GET/method to download
@@ -247,7 +247,13 @@ func connectByHttp(p *page.Page, req *request.Request) (*http.Response, error) {
 
 // choose a proxy server to excute http GET/method to download
 func connectByHttpProxy(p *page.Page, in_req *request.Request) (*http.Response, error) {
+
     request, _ := http.NewRequest("GET", in_req.GetUrl(), nil)
+
+    if header := in_req.GetHeader(); header != nil {
+        request.Header = in_req.GetHeader()
+    }
+
     proxy, err := url.Parse(in_req.GetProxyHost())
     if err != nil {
         return nil, err
@@ -257,16 +263,26 @@ func connectByHttpProxy(p *page.Page, in_req *request.Request) (*http.Response, 
             Proxy: http.ProxyURL(proxy),
         },
     }
-    resp, err := client.Do(request)
-    if err != nil {
-        return nil, err
+
+    var resp *http.Response
+    if resp, err = client.Do(request); err != nil {
+        if e, ok := err.(*url.Error); ok && e.Err != nil && e.Err.Error() == "normal" {
+            //  normal
+        } else {
+            mlog.LogInst().LogError(err.Error())
+            p.SetStatus(true, err.Error())
+            //fmt.Printf("client do error %v \r\n", err)
+            return nil, err
+        }
     }
+
     return resp, nil
 
 }
 
 // Download file and change the charset of page charset.
 func (this *HttpDownloader) downloadFile(p *page.Page, req *request.Request) (*page.Page, string) {
+
     var err error
     var urlstr string
     if urlstr = req.GetUrl(); len(urlstr) == 0 {
@@ -287,6 +303,10 @@ func (this *HttpDownloader) downloadFile(p *page.Page, req *request.Request) (*p
         resp, err = connectByHttp(p, req)
     }
 
+    // println("proxystr", req.GetProxyHost())
+
+    // println("resp", resp.Body)
+
     if err != nil {
         return p, ""
     }
@@ -298,12 +318,12 @@ func (this *HttpDownloader) downloadFile(p *page.Page, req *request.Request) (*p
     p.SetCookies(resp.Cookies())
 
     // get converter to utf-8
-	var bodyStr string
-	if resp.Header.Get("Content-Encoding") == "gzip" {
-		bodyStr = this.changeCharsetEncodingAutoGzipSupport(resp.Header.Get("Content-Type"), resp.Body)
-	} else {
-		bodyStr = this.changeCharsetEncodingAuto(resp.Header.Get("Content-Type"), resp.Body)
-	}
+    var bodyStr string
+    if resp.Header.Get("Content-Encoding") == "gzip" {
+        bodyStr = this.changeCharsetEncodingAutoGzipSupport(resp.Header.Get("Content-Type"), resp.Body)
+    } else {
+        bodyStr = this.changeCharsetEncodingAuto(resp.Header.Get("Content-Type"), resp.Body)
+    }
     //fmt.Printf("utf-8 body %v \r\n", bodyStr)
     defer resp.Body.Close()
     return p, bodyStr

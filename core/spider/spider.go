@@ -12,9 +12,12 @@ import (
     "github.com/bluesand/go_spider/core/pipeline"
     "github.com/bluesand/go_spider/core/scheduler"
     "math/rand"
+    "runtime/debug"
     //"net/http"
     "time"
     //"fmt"
+
+    log "github.com/sirupsen/logrus"
 )
 
 type Spider struct {
@@ -28,7 +31,7 @@ type Spider struct {
 
     pPiplelines []pipeline.Pipeline
 
-    mc  resource_manage.ResourceManage
+    mc resource_manage.ResourceManage
 
     threadnum uint
 
@@ -133,8 +136,8 @@ func (this *Spider) Run() {
 
         // mc is not atomic
         if this.mc.Has() == 0 && req == nil && this.exitWhenComplete {
-	    mlog.StraceInst().Println("** executed callback **")
-	    this.pPageProcesser.Finish()
+            mlog.StraceInst().Println("** executed callback **")
+            this.pPageProcesser.Finish()
             mlog.StraceInst().Println("** end spider **")
             break
         } else if req == nil {
@@ -148,7 +151,8 @@ func (this *Spider) Run() {
         go func(req *request.Request) {
             defer this.mc.FreeOne()
             //time.Sleep( time.Duration(rand.Intn(5)) * time.Second)
-            mlog.StraceInst().Println("start crawl : " + req.GetUrl())
+            // mlog.StraceInst().Println("start crawl : " + req.GetUrl())
+            log.Debug("start crawl:", req.GetUrl())
             this.pageProcess(req)
         }(req)
     }
@@ -328,6 +332,7 @@ func (this *Spider) AddRequests(reqs []*request.Request) *Spider {
 
 // core processer
 func (this *Spider) pageProcess(req *request.Request) {
+
     var p *page.Page
 
     defer func() {
@@ -341,18 +346,21 @@ func (this *Spider) pageProcess(req *request.Request) {
     }()
 
     // download page
+
     for i := 0; i < 3; i++ {
         this.sleep()
         p = this.pDownloader.Download(req)
+        // println(p.IsSucc())
         if p.IsSucc() { // if fail retry 3 times
             break
         }
 
     }
 
-    if !p.IsSucc() { // if fail do not need process
-        return
-    }
+    // 此处注释，如果失败也需要处理。
+    // if !p.IsSucc() { // if fail do not need process
+    //     return
+    // }
 
     this.pPageProcesser.Process(p)
     for _, req := range p.GetTargetRequests() {
