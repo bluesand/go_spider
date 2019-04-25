@@ -2,6 +2,7 @@ package downloader
 
 import (
     "bytes"
+    log "github.com/sirupsen/logrus"
 
     "github.com/PuerkitoBio/goquery"
     "github.com/bitly/go-simplejson"
@@ -297,6 +298,7 @@ func (this *HttpDownloader) downloadFile(p *page.Page, req *request.Request) (*p
         //using http proxy
         //fmt.Print("HttpProxy Enter ",proxystr,"\n")
         resp, err = connectByHttpProxy(p, req)
+        log.Debug("proxystr", proxystr)
     } else {
         //normal http download
         //fmt.Print("Http Normal Enter \n",proxystr,"\n")
