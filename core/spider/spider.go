@@ -12,7 +12,6 @@ import (
     "github.com/bluesand/go_spider/core/pipeline"
     "github.com/bluesand/go_spider/core/scheduler"
     "math/rand"
-    "runtime/debug"
     //"net/http"
     "time"
     //"fmt"
